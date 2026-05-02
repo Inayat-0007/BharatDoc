@@ -1,0 +1,78 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+        
+      - name: Build Frontend
+        working-directory: ./frontend
+        # VITE_API_URL is required at build time, /api is the default for production
+        env:
+          VITE_API_URL: /api
+        run: npm run build
+
+  backend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          push: false
+          load: true
+          tags: bharatdoc-backend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-compose-test:
+    runs-on: ubuntu-latest
+    # Wait for individual builds to succeed first to fail fast
+    needs: [frontend-build, backend-build]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Copy .env.production.example to .env
+        run: cp .env.production.example .env
+        
+      - name: Start services with docker-compose
+        run: docker compose -f docker-compose.prod.yml up -d --build
+        
+      - name: Wait for services to be ready
+        run: sleep 30
+        
+      - name: Check Container Status
+        run: docker compose -f docker-compose.prod.yml ps
+        
+      - name: Backend Health Check
+        run: |
+          # The backend is exposed on port 8000 internally, we can check it via localhost:8000
+          curl -f http://localhost:8000/health || exit 1
+          
+      - name: Display logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs

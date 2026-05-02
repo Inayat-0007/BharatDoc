@@ -92,3 +92,22 @@ docker compose -f docker-compose.prod.yml up -d --build
 - **Firewall**: Ensure only ports `80` (HTTP), `443` (HTTPS), and `22` (SSH) are open to the public. All internal communication (Postgres, Redis, API) is isolated within the Docker network.
 - **Audit Logs**: Sensitive actions (login, register, upload, query, delete) are logged to the `[AUDIT]` stream in the backend container logs.
 - **Rate Limiting**: Configured in `backend/security.py`. Edit the `RATE_LIMITS` dictionary if the defaults are too strict for your use case.
+
+---
+
+## 6. CI/CD Pipeline (GitHub Actions)
+
+The project includes two GitHub Actions workflows:
+1. **Continuous Integration (`ci.yml`)**: Runs on every push/PR to `main`. It builds the frontend, tests the backend Docker image build, and runs a localized smoke test using Docker Compose to ensure the stack boots correctly.
+2. **Continuous Deployment (`deploy.yml`)**: Runs manually (`workflow_dispatch`) or on version tags (e.g., `v1.0.0`). It connects to your production server via SSH, pulls the latest code, rebuilds containers, and performs an automated health check. If the health check fails, it automatically initiates a rollback to the previous commit.
+
+### Required GitHub Secrets for Deployment
+
+To enable automated deployments, navigate to your repository's **Settings > Secrets and variables > Actions** and add the following repository secrets:
+
+- `SERVER_HOST`: The IP address or domain of your production VM (e.g., `192.168.1.100`).
+- `SERVER_USER`: The SSH username (e.g., `ubuntu` or `root`).
+- `SSH_PRIVATE_KEY`: Your private SSH key (e.g., contents of `~/.ssh/id_rsa`). Ensure the public key is added to the server's `~/.ssh/authorized_keys`.
+- `SERVER_PORT`: (Optional) The SSH port, defaults to `22` if not provided.
+
+*Note: You must run the Initial Setup (Section 1) manually on the server at least once to clone the repository and create the `.env` file before the deployment pipeline can work.*
