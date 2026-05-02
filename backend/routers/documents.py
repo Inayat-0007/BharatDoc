@@ -109,23 +109,48 @@ def delete_document(
     
     return None
 
-@router.get("/{doc_id}/pages", response_model=List[schemas.DocumentPageResponse])
+@router.get("/{document_id}/pages", response_model=List[schemas.DocumentPageResponse])
 def get_document_pages(
-    doc_id: int,
-    current_user: models.User = Depends(auth.get_current_user),
-    db: Session = Depends(get_db)
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
 ):
-    # Verify ownership
-    doc = db.query(models.Document).filter(
-        models.Document.id == doc_id, 
+    """
+    Get all extracted pages for a document.
+    """
+    document = db.query(models.Document).filter(
+        models.Document.id == document_id,
         models.Document.user_id == current_user.id
     ).first()
     
-    if not doc:
+    if not document:
         raise HTTPException(status_code=404, detail="Document not found")
         
     pages = db.query(models.DocumentPage).filter(
-        models.DocumentPage.document_id == doc_id
-    ).order_by(models.DocumentPage.page_number.asc()).all()
+        models.DocumentPage.document_id == document_id
+    ).order_by(models.DocumentPage.page_number).all()
     
     return pages
+
+@router.get("/{document_id}/chunks", response_model=List[schemas.DocumentChunkResponse])
+def get_document_chunks(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """
+    Get all extracted chunks for a document.
+    """
+    document = db.query(models.Document).filter(
+        models.Document.id == document_id,
+        models.Document.user_id == current_user.id
+    ).first()
+    
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    chunks = db.query(models.DocumentChunk).filter(
+        models.DocumentChunk.document_id == document_id
+    ).order_by(models.DocumentChunk.page_number, models.DocumentChunk.chunk_index).all()
+    
+    return chunks

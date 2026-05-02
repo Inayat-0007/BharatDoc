@@ -45,3 +45,18 @@ class DocumentPageResponse(DocumentPageBase):
 
     class Config:
         from_attributes = True
+
+class DocumentChunkBase(BaseModel):
+    page_number: int
+    chunk_index: int
+    text: str
+    start_offset: int
+    end_offset: int
+
+class DocumentChunkResponse(DocumentChunkBase):
+    id: int
+    document_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

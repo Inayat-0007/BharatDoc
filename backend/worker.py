@@ -185,10 +185,61 @@ def process_document(self, document_id: int):
         else:
             logger.info(f"Document {document_id} is not supported. Skipping extraction.")
             
+        # Chunking Phase (Phase 8)
+        CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
+        CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
+        
+        logger.info(f"Starting chunking for document {document_id} with size {CHUNK_SIZE} and overlap {CHUNK_OVERLAP}")
+        
+        from models import DocumentChunk
+        db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+        db.commit()
+        
+        pages = db.query(DocumentPage).filter(DocumentPage.document_id == document_id).order_by(DocumentPage.page_number).all()
+        
+        total_chunks = 0
+        for page in pages:
+            if not page.text_content:
+                continue
+                
+            text = page.text_content
+            start = 0
+            chunk_idx = 0
+            
+            while start < len(text):
+                end = start + CHUNK_SIZE
+                # Try to break at a space or newline if possible
+                if end < len(text):
+                    # Find last space/newline in the overlap window to avoid splitting words
+                    last_space = text.rfind(" ", start + CHUNK_SIZE - int(CHUNK_OVERLAP/2), end)
+                    last_newline = text.rfind("\n", start + CHUNK_SIZE - int(CHUNK_OVERLAP/2), end)
+                    break_point = max(last_space, last_newline)
+                    if break_point != -1 and break_point > start:
+                        end = break_point + 1
+                
+                chunk_str = text[start:end]
+                if chunk_str.strip():
+                    doc_chunk = DocumentChunk(
+                        document_id=document_id,
+                        page_number=page.page_number,
+                        chunk_index=chunk_idx,
+                        text=chunk_str.strip(),
+                        start_offset=start,
+                        end_offset=start + len(chunk_str)
+                    )
+                    db.add(doc_chunk)
+                    chunk_idx += 1
+                    total_chunks += 1
+                
+                start += CHUNK_SIZE - CHUNK_OVERLAP
+        
+        db.commit()
+        logger.info(f"Created {total_chunks} chunks for document {document_id}")
+            
         doc.status = DocumentStatus.ready
         db.commit()
         
-        return {"status": "success", "document_id": document_id}
+        return {"status": "success", "document_id": document_id, "chunks_created": total_chunks}
         
     except Exception as exc:
         logger.error(f"Error processing document {document_id}: {exc}")
