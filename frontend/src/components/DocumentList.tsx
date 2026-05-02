@@ -8,7 +8,12 @@ interface Document {
   created_at: string;
 }
 
-const DocumentList = ({ refreshTrigger }: { refreshTrigger: number }) => {
+interface DocumentListProps {
+  refreshTrigger: number;
+  onQueryDocument?: (docId: number, docName: string) => void;
+}
+
+const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger, onQueryDocument }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -87,7 +92,18 @@ const DocumentList = ({ refreshTrigger }: { refreshTrigger: number }) => {
                 <span className={`status badge-${doc.status}`}>{doc.status}</span>
                 <span className="date">{new Date(doc.created_at).toLocaleDateString()}</span>
               </div>
-              <button className="btn-delete" onClick={() => handleDelete(doc.id)}>Delete</button>
+              <div className="doc-actions">
+                {doc.status === 'ready' && onQueryDocument && (
+                  <button
+                    className="btn-query"
+                    onClick={() => onQueryDocument(doc.id, doc.filename)}
+                    id={`qa-btn-${doc.id}`}
+                  >
+                    🔍 Ask AI
+                  </button>
+                )}
+                <button className="btn-delete" onClick={() => handleDelete(doc.id)}>Delete</button>
+              </div>
             </li>
           ))}
         </ul>
