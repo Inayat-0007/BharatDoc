@@ -23,7 +23,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-bharatdoc}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -67,8 +67,8 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
       # Use unprivileged port since not running as root
     ports:
-      # Expose for debugging if needed, but primarily accessed via Caddy
-      - "8000"
+      # Map port for CI smoke tests and direct access
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
