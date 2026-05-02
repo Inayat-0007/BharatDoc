@@ -1,6 +1,10 @@
 :80 {
     # Route API requests to the backend
     handle_path /api/* {
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Content-Type, Authorization"
+        
         reverse_proxy backend:8000
     }
 

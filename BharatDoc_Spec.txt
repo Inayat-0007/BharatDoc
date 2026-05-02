@@ -1,0 +1,27 @@
+# BharatDoc Technical Specification
+
+## Overview
+BharatDoc is a high-security, document-grounded QA platform designed for legal and medical professionals in India. It uses RAG (Retrieval-Augmented Generation) to answer questions based solely on uploaded documents and refuses unsupported answers.
+
+## Technology Stack
+- **Backend**: FastAPI (Python 3.11)
+- **Frontend**: React + Vite + TypeScript + Tailwind CSS
+- **Database**: PostgreSQL with pgvector extension
+- **Cache/Queue**: Redis + Celery
+- **Intelligence**: BGE-M3 (BAAI/bge-m3, 1024-dim multilingual embeddings) + Cross-Encoder re-ranking
+- **OCR**: PaddleOCR primary, Tesseract backup
+- **Reverse Proxy**: Caddy
+- **Deployment**: Docker Compose, single VM
+
+## Security Features
+1. **Confidence Gate**: A deterministic module that blocks answers if retrieval similarity is low.
+2. **Support Validator**: Ensures the final answer is grounded in the retrieved text using n-gram coverage.
+3. **Audit Logging**: Every query and document action is logged for security compliance.
+4. **Rate Limiting**: Protects against API abuse.
+
+## Development Phases
+The project is divided into 17 phases, starting from initial scaffolding to final launch audit. As of May 2026, all 17 phases are 100% complete.
+
+## Key Personnel
+- **Human Supervisor**: Inayat (BharatDoc Owner)
+- **Lead Engineer**: Antigravity (AI Agent)

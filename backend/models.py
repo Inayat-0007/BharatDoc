@@ -61,7 +61,9 @@ class DocumentChunk(Base):
     text = Column(String, nullable=False)
     start_offset = Column(Integer, nullable=False)
     end_offset = Column(Integer, nullable=False)
-    embedding = Column(Vector(384))
+    # Dimension 1024 matches the BGE-M3 embedding model output (BAAI/bge-m3).
+    # If EMBEDDING_MODEL is changed, update this dimension AND create a new migration.
+    embedding = Column(Vector(1024))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     document = relationship("Document", back_populates="chunks")

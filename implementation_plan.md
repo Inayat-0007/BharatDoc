@@ -277,8 +277,8 @@ Phase 0 (Planning)
 
 **Deliverables**:
 - Enable `pgvector` extension in PostgreSQL
-- `embedding` column on chunks table (vector type)
-- BGE-M3 model loading and embedding generation
+- `embedding` column on chunks table (vector type of 1024 dimensions)
+- BGE-M3 (1024-dim) model loading and embedding generation
 - Query embedding → cosine similarity search → top-k results
 - **Strict scoping**: WHERE `document_id = :doc_id` AND `user owns document`
 - Backfill CLI command for existing documents

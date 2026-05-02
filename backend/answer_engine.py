@@ -111,49 +111,53 @@ class AnswerEngine:
     
     def _extractive_answer(self, query: str, chunks: list[dict]) -> AnswerResult:
         """
-        Extractive answering: find the best matching span in the top chunks.
-        
-        Strategy:
-        1. Use top-3 chunks (already sorted by similarity)
-        2. For each chunk, find sentences containing query terms
-        3. Return the most relevant sentences as the answer
+        Local generative answering: uses a lightweight HuggingFace pipeline 
+        to synthesize an answer based on the context, running entirely offline.
         """
-        query_terms = set(self._tokenize(query))
+        import torch
+        from transformers import pipeline
         
-        best_sentences = []
+        # Build context from chunks
+        context_parts = []
+        for i, chunk in enumerate(chunks[:5]):
+            context_parts.append(
+                f"Passage {i+1}: {chunk['text']}"
+            )
+        context = "\n\n".join(context_parts)
         
-        for chunk_data in chunks[:3]:
-            text = chunk_data["text"]
-            sentences = self._split_sentences(text)
+        # Load the model only once (caching on the class if possible, or load dynamically)
+        if not hasattr(self, 'hf_pipeline'):
+            logger.info("Loading local generative model (google/flan-t5-base)...")
+            self.hf_pipeline = pipeline(
+                "text2text-generation", 
+                model="google/flan-t5-base", 
+                device="cpu"
+            )
+            logger.info("Local generative model loaded successfully.")
+
+        # T5 prompt format for Q&A
+        prompt = f"Answer the following question using only the context provided.\n\nContext:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+        
+        try:
+            output = self.hf_pipeline(
+                prompt,
+                max_length=256,
+                min_length=10,
+                num_return_sequences=1,
+                do_sample=False
+            )
+            answer = output[0]['generated_text'].strip()
             
-            for sentence in sentences:
-                sentence_terms = set(self._tokenize(sentence))
-                overlap = len(query_terms & sentence_terms)
-                if overlap > 0:
-                    best_sentences.append((overlap, sentence, chunk_data))
-        
-        # Sort by overlap count (descending)
-        best_sentences.sort(key=lambda x: x[0], reverse=True)
-        
-        if best_sentences:
-            # Take top 3-5 most relevant sentences
-            selected = best_sentences[:5]
-            answer_parts = []
-            seen = set()
-            for _, sentence, _ in selected:
-                normalized = sentence.strip()
-                if normalized not in seen:
-                    answer_parts.append(normalized)
-                    seen.add(normalized)
+            # Formatting nicely if the answer is too short or doesn't make sense
+            if not answer or len(answer) < 5:
+                 answer = "Based on the provided document, the information requested could not be synthesized clearly. Please refer to the citations."
+        except Exception as e:
+            logger.error(f"Generative AI logic failed: {e}")
+            answer = "Sorry, I encountered an error while synthesizing the answer."
             
-            answer = " ".join(answer_parts)
-        else:
-            # No sentence-level match, return the top chunk directly
-            answer = chunks[0]["text"]
-        
         return AnswerResult(
             answer=answer,
-            mode="extractive",
+            mode="synthesized (local-t5)",
             source_chunks=[
                 {
                     "page_number": c["page_number"],

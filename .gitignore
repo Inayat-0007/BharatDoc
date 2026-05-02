@@ -16,3 +16,9 @@ env/
 
 # Docker
 .docker/
+
+# BharatDoc Assets
+backend/uploads/
+*.pdf
+*.png
+complex_test.txt

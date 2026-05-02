@@ -106,12 +106,12 @@ Once approved, work according to these HARD RULES:
 
 ARCHITECTURE & STACK (never deviate):
 - Frontend: React + Vite + TypeScript + Tailwind + shadcn/ui
-- Backend: FastAPI + Python
+- Backend: FastAPI + Python (MUST include pydantic[email], numpy, opencv-python-headless)
 - DB: PostgreSQL + pgvector
 - Queue: Redis + Celery
 - PDF parsing: PyMuPDF
 - OCR: PaddleOCR primary, Tesseract backup
-- Embeddings: BGE-M3
+- Embeddings: BGE-M3 (1024-dim, stored in Vector(1024))
 - Optional LLM: Ollama (local only)
 - Reverse proxy: Caddy
 - Deployment: Docker Compose, single VM

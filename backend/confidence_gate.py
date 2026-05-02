@@ -58,20 +58,24 @@ class ConfidenceGate:
         self.min_avg_score = float(os.getenv("GATE_MIN_AVG_SCORE", DEFAULT_MIN_AVG_SCORE))
         self.min_lexical_overlap = float(os.getenv("GATE_MIN_LEXICAL_OVERLAP", DEFAULT_MIN_LEXICAL_OVERLAP))
         self.min_chunks_required = int(os.getenv("GATE_MIN_CHUNKS", DEFAULT_MIN_CHUNKS_REQUIRED))
+        self.min_cross_score = float(os.getenv("GATE_MIN_CROSS_SCORE", 0.05)) # Reduced from 0.10 for better recall
         
         logger.info(
             f"ConfidenceGate initialized: top={self.min_top_score}, "
             f"avg={self.min_avg_score}, lexical={self.min_lexical_overlap}, "
-            f"min_chunks={self.min_chunks_required}"
+            f"min_chunks={self.min_chunks_required}, cross={self.min_cross_score}"
         )
     
-    def evaluate(self, query: str, results: list[RetrievalResult]) -> GateResult:
+    def evaluate(self, query: str, results: list[RetrievalResult], mode: str = "audit") -> GateResult:
         """
         Evaluate retrieval results against confidence thresholds.
         
-        Returns a GateResult indicating whether to proceed or refuse.
+        Modes:
+        - 'audit': Strict, refusal-first logic.
+        - 'summary': Relaxed, high-recall logic for general document overview.
         """
         diagnostics = {}
+        diagnostics["mode"] = mode
         
         # ---- Check 1: Do we have any results at all? ----
         if not results:
@@ -83,6 +87,13 @@ class ConfidenceGate:
                 refusal_message=REFUSAL_PHRASE,
                 diagnostics=diagnostics
             )
+        
+        # ---- Step 2: Cross-Encoder Re-ranking ----
+        from embedding_service import embedding_service
+        texts = [r.text for r in results]
+        cross_scores = embedding_service.compute_relevance_scores(query, texts)
+        
+        top_cross_score = max(cross_scores) if cross_scores else 0.0
         
         # ---- Compute metrics ----
         similarities = [r.similarity for r in results]
@@ -96,53 +107,64 @@ class ConfidenceGate:
         lexical_overlap = self._compute_lexical_overlap(query, results[0].text)
         
         diagnostics["top_score"] = round(top_score, 4)
+        diagnostics["top_cross_score"] = round(top_cross_score, 4)
         diagnostics["avg_score"] = round(avg_score, 4)
         diagnostics["lexical_overlap"] = round(lexical_overlap, 4)
         diagnostics["passing_chunks"] = passing_chunks
         diagnostics["total_chunks"] = len(results)
-        diagnostics["thresholds"] = {
-            "min_top_score": self.min_top_score,
-            "min_avg_score": self.min_avg_score,
-            "min_lexical_overlap": self.min_lexical_overlap,
-            "min_chunks_required": self.min_chunks_required
-        }
+        
+        is_general_query = any(w in query.lower() for w in ["summarize", "detail", "overview", "about", "what is", "tell me"])
         
         # ---- Gate checks ----
         checks = {}
         
-        # Check 2: Top score must meet minimum
-        checks["top_score_ok"] = top_score >= self.min_top_score
+        if mode == "summary":
+            # RELAXED MODE: For summaries, we just want to pass the top chunks to the LLM.
+            checks["top_score_ok"] = top_score >= (self.min_top_score * 0.2) # Very relaxed
+            checks["cross_score_ok"] = True # Cross-encoder doesn't work well for "summarize this"
+            checks["avg_score_ok"] = True # Ignore average for summary
+            checks["lexical_ok"] = True   # Ignore lexical overlap for summary
+            checks["enough_chunks"] = True # Ignore chunk count
+            
+            # Composite confidence score for summary
+            confidence_score = (
+                0.50 * min(top_score / max(self.min_top_score * 0.2, 0.01), 1.0) +
+                0.50 * 1.0 # Base confidence for summary
+            )
+        else:
+            # STRICT AUDIT MODE (BharatDoc Original)
+            checks["top_score_ok"] = top_score >= self.min_top_score
+            
+            if is_general_query:
+                # General queries score low on cross-encoders because they don't share keywords
+                checks["cross_score_ok"] = True
+                checks["lexical_ok"] = True
+            else:
+                checks["cross_score_ok"] = top_cross_score >= self.min_cross_score
+                checks["lexical_ok"] = lexical_overlap >= self.min_lexical_overlap
+                
+            checks["avg_score_ok"] = avg_score >= self.min_avg_score
+            checks["enough_chunks"] = passing_chunks >= self.min_chunks_required
+
+            # Composite confidence score (Strict weights)
+            confidence_score = (
+                0.40 * min(top_cross_score / max(self.min_cross_score, 0.01), 1.0) +
+                0.30 * min(top_score / max(self.min_top_score, 0.01), 1.0) +
+                0.20 * min(avg_score / max(self.min_avg_score, 0.01), 1.0) +
+                0.10 * min(lexical_overlap / max(self.min_lexical_overlap, 0.01), 1.0)
+            )
         
-        # Check 3: Average score must meet minimum
-        checks["avg_score_ok"] = avg_score >= self.min_avg_score
-        
-        # Check 4: Lexical overlap must meet minimum
-        checks["lexical_ok"] = lexical_overlap >= self.min_lexical_overlap
-        
-        # Check 5: Enough chunks must pass
-        checks["enough_chunks"] = passing_chunks >= self.min_chunks_required
-        
-        diagnostics["checks"] = checks
-        
-        # ---- Decision: ALL checks must pass ----
-        passed = all(checks.values())
-        
-        # Composite confidence score (weighted average of metrics)
-        # This gives downstream consumers a single 0-1 score
-        confidence_score = (
-            0.50 * min(top_score / max(self.min_top_score, 0.01), 1.0) +
-            0.30 * min(avg_score / max(self.min_avg_score, 0.01), 1.0) +
-            0.20 * min(lexical_overlap / max(self.min_lexical_overlap, 0.01), 1.0)
-        )
         confidence_score = max(0.0, min(confidence_score, 1.0))
-        
+        diagnostics["checks"] = checks
         diagnostics["confidence_score"] = round(confidence_score, 4)
+        
+        passed = all(checks.values())
         
         if not passed:
             failed_checks = [k for k, v in checks.items() if not v]
             diagnostics["reason"] = "threshold_failure"
             diagnostics["failed_checks"] = failed_checks
-            logger.info(f"Gate REFUSED query '{query[:50]}...' — failed: {failed_checks}")
+            logger.info(f"Gate [{mode}] REFUSED query '{query[:50]}...' — failed: {failed_checks}")
             return GateResult(
                 passed=False,
                 confidence_score=confidence_score,
@@ -151,8 +173,8 @@ class ConfidenceGate:
             )
         
         logger.info(
-            f"Gate PASSED query '{query[:50]}...' — "
-            f"confidence={confidence_score:.3f}, top={top_score:.3f}"
+            f"Gate [{mode}] PASSED query '{query[:50]}...' — "
+            f"confidence={confidence_score:.3f}"
         )
         return GateResult(
             passed=True,

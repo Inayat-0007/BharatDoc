@@ -1,10 +1,13 @@
 import os
+import logging
 import shutil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas, auth
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -100,8 +103,11 @@ def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
         
     # Delete the physical file
-    if os.path.exists(doc.file_path):
-        os.remove(doc.file_path)
+    try:
+        if os.path.exists(doc.file_path):
+            os.remove(doc.file_path)
+    except Exception as e:
+        logger.warning(f"Failed to remove physical file {doc.file_path}: {e}")
         
     # Delete DB record
     db.delete(doc)
@@ -234,6 +240,13 @@ def query_document(
     # Step 1: Vector retrieval
     query_embedding = embedding_service.get_embedding(sanitized_query)
     
+    # Increase top_k for general/summary queries to get more context
+    effective_top_k = request.top_k
+    is_general = any(w in sanitized_query.lower() for w in ["summarize", "detail", "overview", "about", "what is", "tell me"])
+    if is_general:
+        effective_top_k = max(effective_top_k, 10)
+        logger.info(f"General query detected, boosting top_k to {effective_top_k}")
+    
     distance_col = models.DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
     
     results = db.query(models.DocumentChunk).filter(
@@ -241,7 +254,7 @@ def query_document(
         models.DocumentChunk.embedding.isnot(None)
     ).add_columns(distance_col).order_by(
         distance_col
-    ).limit(request.top_k).all()
+    ).limit(effective_top_k).all()
     
     # Convert to RetrievalResult objects for the gate
     retrieval_results = []
@@ -255,8 +268,8 @@ def query_document(
             chunk_index=chunk.chunk_index
         ))
     
-    # Step 2: Confidence gate
-    gate_result = confidence_gate.evaluate(sanitized_query, retrieval_results)
+    # Step 2: Confidence gate (With Mode Support)
+    gate_result = confidence_gate.evaluate(sanitized_query, retrieval_results, mode=request.mode)
     
     if not gate_result.passed:
         return schemas.QueryResponse(

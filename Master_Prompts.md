@@ -153,13 +153,13 @@ This is a retrieval-grounded QA system:
 
 MANDATORY MVP STACK:
 - Frontend: React + Vite + TypeScript + Tailwind + shadcn/ui
-- Backend: FastAPI + Python
+- Backend: FastAPI + Python (must include pydantic[email], numpy, opencv-python-headless)
 - DB: PostgreSQL + pgvector
 - Queue: Redis + Celery
 - PDF parsing: PyMuPDF
 - OCR fallback: PaddleOCR
 - optional OCR backup: Tesseract
-- Embeddings: BGE-M3
+- Embeddings: BGE-M3 (1024-dim, stored in Vector(1024))
 - Optional local generation: Ollama
 - Reverse proxy: Caddy
 - Deployment: Docker Compose

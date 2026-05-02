@@ -25,7 +25,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (token) {
         try {
           // Use the proxy configured in vite or explicit path
-          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/auth/me`, {
+          const apiUrl = import.meta.env.VITE_API_URL || '/api';
+          const response = await fetch(`${apiUrl}/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`
             }

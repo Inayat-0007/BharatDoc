@@ -75,6 +75,7 @@ class QueryRequest(BaseModel):
     query: str
     document_id: int
     top_k: int = 5
+    mode: str = "audit" # "audit" (strict) or "summary" (conversational)
 
 class Citation(BaseModel):
     page_number: int
