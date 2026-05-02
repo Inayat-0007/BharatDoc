@@ -29,3 +29,18 @@ class DocumentResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+from typing import Optional
+
+class DocumentPageBase(BaseModel):
+    page_number: int
+    text_content: Optional[str] = None
+    fallback_needed: bool
+
+class DocumentPageResponse(DocumentPageBase):
+    id: int
+    document_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

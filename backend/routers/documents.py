@@ -108,3 +108,24 @@ def delete_document(
     db.commit()
     
     return None
+
+@router.get("/{doc_id}/pages", response_model=List[schemas.DocumentPageResponse])
+def get_document_pages(
+    doc_id: int,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Verify ownership
+    doc = db.query(models.Document).filter(
+        models.Document.id == doc_id, 
+        models.Document.user_id == current_user.id
+    ).first()
+    
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    pages = db.query(models.DocumentPage).filter(
+        models.DocumentPage.document_id == doc_id
+    ).order_by(models.DocumentPage.page_number.asc()).all()
+    
+    return pages
