@@ -21,7 +21,7 @@ const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger, onQueryDocu
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch('http://localhost:8000/documents', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/documents`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -60,7 +60,7 @@ const DocumentList: React.FC<DocumentListProps> = ({ refreshTrigger, onQueryDocu
     if (!confirm("Are you sure you want to delete this document?")) return;
     
     try {
-      const response = await fetch(`http://localhost:8000/documents/${id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/documents/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`

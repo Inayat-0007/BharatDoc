@@ -1,0 +1,19 @@
+# Production Caddyfile
+# Handles automatic HTTPS via Let's Encrypt when a domain is provided
+
+{$DOMAIN_NAME:localhost} {
+    # Compress responses to save bandwidth
+    encode gzip zstd
+
+    # Route API requests to the backend container
+    handle_path /api/* {
+        # Forward original IP for rate limiting and audit logging
+        header_up X-Forwarded-For {remote_host}
+        reverse_proxy backend:8000
+    }
+
+    # Route all other requests to the frontend static server (Nginx)
+    handle {
+        reverse_proxy frontend:80
+    }
+}
