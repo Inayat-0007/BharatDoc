@@ -212,6 +212,12 @@ def query_document(
     """
     from embedding_service import embedding_service
     from confidence_gate import confidence_gate, RetrievalResult, REFUSAL_PHRASE
+    from security import sanitize_query_input
+    
+    # Sanitize query input
+    sanitized_query = sanitize_query_input(request.query)
+    if not sanitized_query:
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
     
     # Verify document belongs to user
     document = db.query(models.Document).filter(
@@ -226,7 +232,7 @@ def query_document(
         raise HTTPException(status_code=400, detail="Document is not ready for queries")
     
     # Step 1: Vector retrieval
-    query_embedding = embedding_service.get_embedding(request.query)
+    query_embedding = embedding_service.get_embedding(sanitized_query)
     
     distance_col = models.DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
     
@@ -250,7 +256,7 @@ def query_document(
         ))
     
     # Step 2: Confidence gate
-    gate_result = confidence_gate.evaluate(request.query, retrieval_results)
+    gate_result = confidence_gate.evaluate(sanitized_query, retrieval_results)
     
     if not gate_result.passed:
         return schemas.QueryResponse(
@@ -276,7 +282,7 @@ def query_document(
     ]
     
     answer_result = answer_engine.generate_answer(
-        query=request.query,
+        query=sanitized_query,
         chunks=chunks_for_engine,
         confidence_score=gate_result.confidence_score
     )
@@ -300,7 +306,7 @@ def query_document(
     validation = support_validator.validate(
         answer=answer_result.answer,
         chunks=chunks_for_engine,
-        query=request.query
+        query=sanitized_query
     )
     
     diagnostics["support_level"] = validation.level.value
