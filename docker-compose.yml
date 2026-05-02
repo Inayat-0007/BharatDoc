@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=bharatdoc
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  frontend:
+    build:
+      context: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost/api
+    ports:
+      - "5173:5173"
+
+  backend:
+    build:
+      context: ./backend
+    volumes:
+      - ./backend:/app
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/bharatdoc
+      - SECRET_KEY=supersecretkey12345
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pg_data:
