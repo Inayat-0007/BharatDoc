@@ -195,3 +195,94 @@ def search_documents(
         })
         
     return search_results
+
+@router.post("/query", response_model=schemas.QueryResponse)
+def query_document(
+    request: schemas.QueryRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """
+    Phase 10: Gated document Q&A endpoint.
+    
+    1. Retrieves top-k chunks via vector similarity
+    2. Runs results through the confidence gate
+    3. If gate FAILS → returns exact refusal phrase
+    4. If gate PASSES → returns extractive answer from top chunks
+    """
+    from embedding_service import embedding_service
+    from confidence_gate import confidence_gate, RetrievalResult
+    
+    # Verify document belongs to user
+    document = db.query(models.Document).filter(
+        models.Document.id == request.document_id,
+        models.Document.user_id == current_user.id
+    ).first()
+    
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    if document.status != models.DocumentStatus.ready:
+        raise HTTPException(status_code=400, detail="Document is not ready for queries")
+    
+    # Step 1: Vector retrieval
+    query_embedding = embedding_service.get_embedding(request.query)
+    
+    distance_col = models.DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
+    
+    results = db.query(models.DocumentChunk).filter(
+        models.DocumentChunk.document_id == request.document_id,
+        models.DocumentChunk.embedding.isnot(None)
+    ).add_columns(distance_col).order_by(
+        distance_col
+    ).limit(request.top_k).all()
+    
+    # Convert to RetrievalResult objects for the gate
+    retrieval_results = []
+    for chunk, distance in results:
+        similarity = 1.0 - float(distance) if distance is not None else 0.0
+        retrieval_results.append(RetrievalResult(
+            text=chunk.text,
+            similarity=similarity,
+            document_id=chunk.document_id,
+            page_number=chunk.page_number,
+            chunk_index=chunk.chunk_index
+        ))
+    
+    # Step 2: Confidence gate
+    gate_result = confidence_gate.evaluate(request.query, retrieval_results)
+    
+    if not gate_result.passed:
+        return schemas.QueryResponse(
+            status="refused",
+            answer=None,
+            confidence=gate_result.confidence_score,
+            citations=[],
+            refusal_message=gate_result.refusal_message,
+            diagnostics=gate_result.diagnostics
+        )
+    
+    # Step 3: Extractive answer (Phase 10 delivers extractive-only;
+    # Phase 11 will add LLM synthesis)
+    # For now, return the top chunk's text as the answer
+    top_chunks = retrieval_results[:3]  # top 3 for context
+    answer_text = "\n\n".join([c.text for c in top_chunks])
+    
+    citations = [
+        schemas.Citation(
+            page_number=r.page_number,
+            chunk_index=r.chunk_index,
+            text=r.text[:200],  # truncate for response size
+            similarity=round(r.similarity, 4)
+        )
+        for r in retrieval_results
+    ]
+    
+    return schemas.QueryResponse(
+        status="answered",
+        answer=answer_text,
+        confidence=gate_result.confidence_score,
+        citations=citations,
+        refusal_message=None,
+        diagnostics=gate_result.diagnostics
+    )

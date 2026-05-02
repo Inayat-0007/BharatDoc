@@ -70,3 +70,22 @@ class DocumentSearchResult(BaseModel):
     chunk: DocumentChunkResponse
     similarity: float
     document_filename: str
+
+class QueryRequest(BaseModel):
+    query: str
+    document_id: int
+    top_k: int = 5
+
+class Citation(BaseModel):
+    page_number: int
+    chunk_index: int
+    text: str
+    similarity: float
+
+class QueryResponse(BaseModel):
+    status: str  # "answered" | "refused"
+    answer: Optional[str] = None
+    confidence: float
+    citations: List[Citation] = []
+    refusal_message: Optional[str] = None
+    diagnostics: Optional[dict] = None
