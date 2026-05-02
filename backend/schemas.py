@@ -19,3 +19,13 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: str | None = None
+
+class DocumentResponse(BaseModel):
+    id: int
+    filename: str
+    content_type: str
+    status: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

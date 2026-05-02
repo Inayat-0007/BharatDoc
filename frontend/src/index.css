@@ -109,3 +109,128 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* Custom App Styles */
+.auth-container, .dashboard-container {
+  padding: 2rem;
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.dashboard-container {
+  max-width: 800px;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+.card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: left;
+  box-shadow: var(--shadow);
+}
+
+.welcome-card {
+  background-color: var(--code-bg);
+}
+
+.error {
+  color: #ef4444;
+  background: #fee2e2;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+input {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Document List */
+.document-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+}
+
+.document-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.document-item:last-child {
+  border-bottom: none;
+}
+
+.doc-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-uploaded { background: #e0f2fe; color: #0369a1; }
+.badge-processing { background: #fef08a; color: #854d0e; }
+.badge-ready { background: #dcfce3; color: #166534; }
+.badge-failed { background: #fee2e2; color: #991b1b; }
+
+.date {
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.btn-delete {
+  background-color: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  padding: 0.25rem 0.75rem;
+}
+.btn-delete:hover {
+  background-color: #fee2e2;
+}
