@@ -55,6 +55,10 @@ async def upload_document(
     db.commit()
     db.refresh(new_doc)
     
+    # 6. Trigger background processing
+    from worker import process_document
+    process_document.delay(new_doc.id)
+    
     return new_doc
 
 @router.get("", response_model=List[schemas.DocumentResponse])

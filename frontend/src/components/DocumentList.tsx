@@ -16,7 +16,6 @@ const DocumentList = ({ refreshTrigger }: { refreshTrigger: number }) => {
 
   const fetchDocuments = async () => {
     try {
-      setLoading(true);
       const response = await fetch('http://localhost:8000/documents', {
         headers: {
           Authorization: `Bearer ${token}`
@@ -37,6 +36,20 @@ const DocumentList = ({ refreshTrigger }: { refreshTrigger: number }) => {
       fetchDocuments();
     }
   }, [token, refreshTrigger]);
+
+  // Polling logic for documents still processing
+  useEffect(() => {
+    if (!token) return;
+    
+    const hasProcessingDocs = documents.some(d => d.status === 'uploaded' || d.status === 'processing');
+    if (!hasProcessingDocs) return;
+
+    const intervalId = setInterval(() => {
+      fetchDocuments();
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(intervalId);
+  }, [documents, token]);
 
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this document?")) return;

@@ -44,10 +44,31 @@ services:
       - ENVIRONMENT=development
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/bharatdoc
       - SECRET_KEY=supersecretkey12345
+      - REDIS_URL=redis://redis:6379/0
     ports:
       - "8000:8000"
     depends_on:
       - db
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  worker:
+    build:
+      context: ./backend
+    command: celery -A worker.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/bharatdoc
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
 
 volumes:
   caddy_data:
