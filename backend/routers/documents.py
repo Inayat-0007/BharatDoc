@@ -154,3 +154,44 @@ def get_document_chunks(
     ).order_by(models.DocumentChunk.page_number, models.DocumentChunk.chunk_index).all()
     
     return chunks
+
+@router.post("/search", response_model=List[schemas.DocumentSearchResult])
+def search_documents(
+    request: schemas.DocumentSearchRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """
+    Search document chunks using vector embeddings.
+    """
+    from embedding_service import embedding_service
+    
+    # Generate query embedding
+    query_embedding = embedding_service.get_embedding(request.query)
+    
+    # Base query for chunks belonging to user's documents
+    base_query = db.query(models.DocumentChunk, models.Document.filename).join(
+        models.Document, models.DocumentChunk.document_id == models.Document.id
+    ).filter(models.Document.user_id == current_user.id)
+    
+    # Filter by specific documents if provided
+    if request.document_ids:
+        base_query = base_query.filter(models.DocumentChunk.document_id.in_(request.document_ids))
+        
+    # pgvector cosine distance: embedding.cosine_distance(query_embedding)
+    # Cosine similarity is 1 - cosine_distance
+    distance_col = models.DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
+    
+    results = base_query.add_columns(distance_col).order_by(
+        distance_col
+    ).limit(request.top_k).all()
+    
+    search_results = []
+    for chunk, filename, distance in results:
+        search_results.append({
+            "chunk": chunk,
+            "similarity": 1.0 - float(distance) if distance is not None else 0.0,
+            "document_filename": filename
+        })
+        
+    return search_results

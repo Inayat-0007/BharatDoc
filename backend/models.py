@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 from database import Base
+from pgvector.sqlalchemy import Vector
 
 class DocumentStatus(str, enum.Enum):
     uploaded = "uploaded"
@@ -60,6 +61,7 @@ class DocumentChunk(Base):
     text = Column(String, nullable=False)
     start_offset = Column(Integer, nullable=False)
     end_offset = Column(Integer, nullable=False)
+    embedding = Column(Vector(384))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     document = relationship("Document", back_populates="chunks")

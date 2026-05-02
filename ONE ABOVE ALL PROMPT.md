@@ -8,7 +8,7 @@
 ### 📋 COPY EVERYTHING BELOW THIS LINE AND PASTE INTO YOUR AGENT
 
 ---
-
+=
 ```
 You are the sole engineering force behind BharatDoc. You are resuming work. A previous session may or may not have existed. You do NOT know the current state — you must DISCOVER it.
 

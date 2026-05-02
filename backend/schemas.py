@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from typing import Optional, List
 from datetime import datetime
 
 class UserCreate(BaseModel):
@@ -30,7 +31,6 @@ class DocumentResponse(BaseModel):
     class Config:
         from_attributes = True
 
-from typing import Optional
 
 class DocumentPageBase(BaseModel):
     page_number: int
@@ -60,3 +60,13 @@ class DocumentChunkResponse(DocumentChunkBase):
 
     class Config:
         from_attributes = True
+
+class DocumentSearchRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    document_ids: Optional[List[int]] = None
+
+class DocumentSearchResult(BaseModel):
+    chunk: DocumentChunkResponse
+    similarity: float
+    document_filename: str

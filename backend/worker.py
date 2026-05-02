@@ -4,7 +4,8 @@ import logging
 from celery import Celery
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models import Document, DocumentStatus
+from models import Document, DocumentStatus, DocumentPage, DocumentChunk
+from embedding_service import embedding_service
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -34,7 +35,6 @@ def process_document(self, document_id: int):
     Phase 6 pipeline: extracts text from PDF page by page.
     """
     import fitz # PyMuPDF
-    from models import DocumentPage
     
     logger.info(f"Starting processing for document {document_id}")
     
@@ -126,9 +126,10 @@ def process_document(self, document_id: int):
                 )
                 db.add(doc_page)
             
+            num_pages = len(pdf_doc)
             pdf_doc.close()
             db.commit()
-            logger.info(f"Extracted {len(pdf_doc)} pages for document {document_id}")
+            logger.info(f"Extracted {num_pages} pages for document {document_id}")
             
         elif doc.content_type in ["image/png", "image/jpeg", "image/jpg"]:
             logger.info(f"Extracting text from Image: {doc.file_path}")
@@ -185,19 +186,21 @@ def process_document(self, document_id: int):
         else:
             logger.info(f"Document {document_id} is not supported. Skipping extraction.")
             
-        # Chunking Phase (Phase 8)
+        # Chunking & Embedding Phase (Phase 8 & 9)
         CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
         CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
         
-        logger.info(f"Starting chunking for document {document_id} with size {CHUNK_SIZE} and overlap {CHUNK_OVERLAP}")
+        logger.info(f"Starting chunking and embedding for document {document_id}")
         
-        from models import DocumentChunk
+        # DocumentChunk and embedding_service imported at module level
+        
         db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
         db.commit()
         
         pages = db.query(DocumentPage).filter(DocumentPage.document_id == document_id).order_by(DocumentPage.page_number).all()
         
-        total_chunks = 0
+        chunks_data = []
+        
         for page in pages:
             if not page.text_content:
                 continue
@@ -208,9 +211,7 @@ def process_document(self, document_id: int):
             
             while start < len(text):
                 end = start + CHUNK_SIZE
-                # Try to break at a space or newline if possible
                 if end < len(text):
-                    # Find last space/newline in the overlap window to avoid splitting words
                     last_space = text.rfind(" ", start + CHUNK_SIZE - int(CHUNK_OVERLAP/2), end)
                     last_newline = text.rfind("\n", start + CHUNK_SIZE - int(CHUNK_OVERLAP/2), end)
                     break_point = max(last_space, last_newline)
@@ -219,22 +220,35 @@ def process_document(self, document_id: int):
                 
                 chunk_str = text[start:end]
                 if chunk_str.strip():
-                    doc_chunk = DocumentChunk(
-                        document_id=document_id,
-                        page_number=page.page_number,
-                        chunk_index=chunk_idx,
-                        text=chunk_str.strip(),
-                        start_offset=start,
-                        end_offset=start + len(chunk_str)
-                    )
-                    db.add(doc_chunk)
+                    chunks_data.append({
+                        "document_id": document_id,
+                        "page_number": page.page_number,
+                        "chunk_index": chunk_idx,
+                        "text": chunk_str.strip(),
+                        "start_offset": start,
+                        "end_offset": start + len(chunk_str)
+                    })
                     chunk_idx += 1
-                    total_chunks += 1
                 
                 start += CHUNK_SIZE - CHUNK_OVERLAP
         
-        db.commit()
-        logger.info(f"Created {total_chunks} chunks for document {document_id}")
+        if chunks_data:
+            # Generate embeddings in batch
+            texts = [c["text"] for c in chunks_data]
+            logger.info(f"Generating embeddings for {len(texts)} chunks...")
+            embeddings = embedding_service.get_embeddings(texts)
+            
+            for i, chunk_dict in enumerate(chunks_data):
+                doc_chunk = DocumentChunk(
+                    **chunk_dict,
+                    embedding=embeddings[i]
+                )
+                db.add(doc_chunk)
+                
+            db.commit()
+            
+        total_chunks = len(chunks_data)
+        logger.info(f"Created {total_chunks} embedded chunks for document {document_id}")
             
         doc.status = DocumentStatus.ready
         db.commit()
