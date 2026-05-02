@@ -7,9 +7,10 @@
 
     # Route API requests to the backend container
     handle_path /api/* {
-        # Forward original IP for rate limiting and audit logging
-        header_up X-Forwarded-For {remote_host}
-        reverse_proxy backend:8000
+        reverse_proxy backend:8000 {
+            # Forward original IP for rate limiting and audit logging
+            header_up X-Forwarded-For {remote_host}
+        }
     }
 
     # Route all other requests to the frontend static server (Nginx)
