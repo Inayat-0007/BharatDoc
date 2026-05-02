@@ -114,7 +114,6 @@ class AnswerEngine:
         Local generative answering: uses a lightweight HuggingFace pipeline 
         to synthesize an answer based on the context, running entirely offline.
         """
-        import torch
         from transformers import pipeline
         
         # Build context from chunks

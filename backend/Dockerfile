@@ -14,11 +14,14 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download models to avoid cold starts in production
+# Pre-download models to avoid cold starts on first request
 RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; \
     SentenceTransformer('BAAI/bge-m3'); \
     CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); \
     from transformers import pipeline; pipeline('text2text-generation', model='google/flan-t5-base')"
+
+# Pre-download PaddleOCR models (det, rec, cls for English)
+RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='en', show_log=False)"
 
 # Copy source code
 COPY . .
