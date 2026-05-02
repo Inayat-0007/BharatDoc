@@ -262,27 +262,43 @@ def query_document(
             diagnostics=gate_result.diagnostics
         )
     
-    # Step 3: Extractive answer (Phase 10 delivers extractive-only;
-    # Phase 11 will add LLM synthesis)
-    # For now, return the top chunk's text as the answer
-    top_chunks = retrieval_results[:3]  # top 3 for context
-    answer_text = "\n\n".join([c.text for c in top_chunks])
+    # Step 3: Answer Engine (Phase 11)
+    from answer_engine import answer_engine
+    
+    chunks_for_engine = [
+        {
+            "text": r.text,
+            "page_number": r.page_number,
+            "chunk_index": r.chunk_index,
+            "similarity": r.similarity
+        }
+        for r in retrieval_results
+    ]
+    
+    answer_result = answer_engine.generate_answer(
+        query=request.query,
+        chunks=chunks_for_engine,
+        confidence_score=gate_result.confidence_score
+    )
     
     citations = [
         schemas.Citation(
             page_number=r.page_number,
             chunk_index=r.chunk_index,
-            text=r.text[:200],  # truncate for response size
+            text=r.text[:200],
             similarity=round(r.similarity, 4)
         )
         for r in retrieval_results
     ]
     
+    diagnostics = gate_result.diagnostics
+    diagnostics["answer_mode"] = answer_result.mode
+    
     return schemas.QueryResponse(
         status="answered",
-        answer=answer_text,
+        answer=answer_result.answer,
         confidence=gate_result.confidence_score,
         citations=citations,
         refusal_message=None,
-        diagnostics=gate_result.diagnostics
+        diagnostics=diagnostics
     )
