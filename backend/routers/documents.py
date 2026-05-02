@@ -211,7 +211,7 @@ def query_document(
     4. If gate PASSES → returns extractive answer from top chunks
     """
     from embedding_service import embedding_service
-    from confidence_gate import confidence_gate, RetrievalResult
+    from confidence_gate import confidence_gate, RetrievalResult, REFUSAL_PHRASE
     
     # Verify document belongs to user
     document = db.query(models.Document).filter(
@@ -294,10 +294,65 @@ def query_document(
     diagnostics = gate_result.diagnostics
     diagnostics["answer_mode"] = answer_result.mode
     
+    # Step 4: Support Validator (Phase 12)
+    from support_validator import support_validator
+    
+    validation = support_validator.validate(
+        answer=answer_result.answer,
+        chunks=chunks_for_engine,
+        query=request.query
+    )
+    
+    diagnostics["support_level"] = validation.level.value
+    diagnostics["coverage_score"] = validation.coverage_score
+    diagnostics["validation"] = validation.diagnostics
+    if validation.rejection_reasons:
+        diagnostics["rejection_reasons"] = validation.rejection_reasons
+    
+    # If unsupported → override answer with refusal
+    if validation.level.value == "unsupported":
+        return schemas.QueryResponse(
+            status="refused",
+            answer=None,
+            confidence=gate_result.confidence_score,
+            support_level=validation.level.value,
+            answer_mode=answer_result.mode,
+            citations=[],
+            refusal_message=REFUSAL_PHRASE,
+            diagnostics=diagnostics
+        )
+    
+    # Filter citations to only supporting chunks
+    citations = []
+    for i, r in enumerate(retrieval_results):
+        if i in validation.supporting_chunk_indices:
+            citations.append(
+                schemas.Citation(
+                    page_number=r.page_number,
+                    chunk_index=r.chunk_index,
+                    text=r.text[:200],
+                    similarity=round(r.similarity, 4)
+                )
+            )
+    
+    # If no supporting citations found, include all (extractive mode is inherently supported)
+    if not citations:
+        citations = [
+            schemas.Citation(
+                page_number=r.page_number,
+                chunk_index=r.chunk_index,
+                text=r.text[:200],
+                similarity=round(r.similarity, 4)
+            )
+            for r in retrieval_results
+        ]
+    
     return schemas.QueryResponse(
         status="answered",
-        answer=answer_result.answer,
+        answer=validation.validated_answer,
         confidence=gate_result.confidence_score,
+        support_level=validation.level.value,
+        answer_mode=answer_result.mode,
         citations=citations,
         refusal_message=None,
         diagnostics=diagnostics

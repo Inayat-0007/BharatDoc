@@ -86,6 +86,8 @@ class QueryResponse(BaseModel):
     status: str  # "answered" | "refused"
     answer: Optional[str] = None
     confidence: float
+    support_level: Optional[str] = None  # "supported" | "partially_supported" | "unsupported"
+    answer_mode: Optional[str] = None    # "extractive" | "synthesis"
     citations: List[Citation] = []
     refusal_message: Optional[str] = None
     diagnostics: Optional[dict] = None
