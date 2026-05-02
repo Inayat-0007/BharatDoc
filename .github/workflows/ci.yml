@@ -21,9 +21,7 @@ jobs:
           
       - name: Install Frontend Dependencies
         working-directory: ./frontend
-        env:
-          NPM_CONFIG_OPTIONAL: "true"
-        run: npm ci --include=optional
+        run: npm ci
         
       - name: Build Frontend
         working-directory: ./frontend
