@@ -65,7 +65,9 @@ services:
       - USE_LLM=${USE_LLM:-false}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
-      # Use unprivileged port since not running as root
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-52428800}
+    volumes:
+      - uploads_data:/app/uploads
     ports:
       # Map port for CI smoke tests and direct access
       - "8000:8000"
@@ -86,6 +88,8 @@ services:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bharatdoc}
       - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -97,3 +101,4 @@ volumes:
   caddy_config:
   pg_data:
   redis_data:
+  uploads_data:
