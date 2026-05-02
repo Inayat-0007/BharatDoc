@@ -44,6 +44,7 @@ class DocumentPage(Base):
     page_number = Column(Integer, nullable=False)
     text_content = Column(String, nullable=True)
     fallback_needed = Column(Boolean, default=False)
+    parser_used = Column(String, default="pymupdf")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     document = relationship("Document", back_populates="pages")

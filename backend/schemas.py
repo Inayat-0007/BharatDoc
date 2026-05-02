@@ -36,6 +36,7 @@ class DocumentPageBase(BaseModel):
     page_number: int
     text_content: Optional[str] = None
     fallback_needed: bool
+    parser_used: Optional[str] = None
 
 class DocumentPageResponse(DocumentPageBase):
     id: int

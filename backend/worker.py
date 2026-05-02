@@ -59,26 +59,131 @@ def process_document(self, document_id: int):
             logger.info(f"Extracting text from PDF: {doc.file_path}")
             pdf_doc = fitz.open(doc.file_path)
             
+            # Setup OCR if enabled
+            use_ocr = os.getenv("USE_OCR", "true").lower() == "true"
+            ocr_engine = None
+            if use_ocr:
+                try:
+                    from paddleocr import PaddleOCR
+                    ocr_engine = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
+                    logger.info("PaddleOCR initialized successfully.")
+                except Exception as e:
+                    logger.warning(f"PaddleOCR failed to initialize: {e}. Falling back to pytesseract.")
+                    ocr_engine = "tesseract"
+
             for page_num in range(len(pdf_doc)):
                 page = pdf_doc.load_page(page_num)
                 text = page.get_text()
                 
-                # Low-text heuristic: if < 50 chars, mark fallback_needed (for OCR later)
+                # Low-text heuristic: if < 50 chars, mark fallback_needed
                 fallback = len(text.strip()) < 50
+                parser_used = "pymupdf"
+                
+                if fallback and use_ocr:
+                    logger.info(f"Page {page_num+1} has low text. Running OCR fallback.")
+                    # Render page to image
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2)) # 2x zoom for better OCR
+                    
+                    if ocr_engine != "tesseract" and ocr_engine is not None:
+                        # PaddleOCR
+                        try:
+                            import numpy as np
+                            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+                            if pix.n == 4:
+                                img = img[:, :, :3] # drop alpha
+                            
+                            result = ocr_engine.ocr(img, cls=True)
+                            ocr_text = ""
+                            if result and result[0]:
+                                for line in result[0]:
+                                    ocr_text += line[1][0] + "\n"
+                            
+                            text = ocr_text
+                            fallback = False
+                            parser_used = "paddleocr"
+                        except Exception as e:
+                            logger.error(f"PaddleOCR error on page {page_num+1}: {e}")
+                    
+                    if parser_used == "pymupdf": # If paddle failed or using tesseract
+                        try:
+                            from PIL import Image
+                            import io
+                            import pytesseract
+                            img = Image.open(io.BytesIO(pix.tobytes("png")))
+                            ocr_text = pytesseract.image_to_string(img)
+                            text = ocr_text
+                            fallback = False
+                            parser_used = "tesseract"
+                        except Exception as e:
+                            logger.error(f"Tesseract error on page {page_num+1}: {e}")
                 
                 doc_page = DocumentPage(
                     document_id=document_id,
                     page_number=page_num + 1,
                     text_content=text,
-                    fallback_needed=fallback
+                    fallback_needed=fallback,
+                    parser_used=parser_used
                 )
                 db.add(doc_page)
             
             pdf_doc.close()
             db.commit()
             logger.info(f"Extracted {len(pdf_doc)} pages for document {document_id}")
+            
+        elif doc.content_type in ["image/png", "image/jpeg", "image/jpg"]:
+            logger.info(f"Extracting text from Image: {doc.file_path}")
+            
+            # Setup OCR if enabled
+            use_ocr = os.getenv("USE_OCR", "true").lower() == "true"
+            ocr_engine = None
+            if use_ocr:
+                try:
+                    from paddleocr import PaddleOCR
+                    ocr_engine = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
+                except Exception as e:
+                    ocr_engine = "tesseract"
+                    
+            text = ""
+            fallback = True
+            parser_used = "none"
+            
+            if use_ocr:
+                if ocr_engine != "tesseract" and ocr_engine is not None:
+                    try:
+                        import cv2
+                        img = cv2.imread(doc.file_path)
+                        result = ocr_engine.ocr(img, cls=True)
+                        if result and result[0]:
+                            for line in result[0]:
+                                text += line[1][0] + "\n"
+                        fallback = False
+                        parser_used = "paddleocr"
+                    except Exception as e:
+                        logger.error(f"PaddleOCR error on image: {e}")
+                
+                if parser_used == "none":
+                    try:
+                        from PIL import Image
+                        import pytesseract
+                        img = Image.open(doc.file_path)
+                        text = pytesseract.image_to_string(img)
+                        fallback = False
+                        parser_used = "tesseract"
+                    except Exception as e:
+                        logger.error(f"Tesseract error on image: {e}")
+                        
+            doc_page = DocumentPage(
+                document_id=document_id,
+                page_number=1,
+                text_content=text,
+                fallback_needed=fallback,
+                parser_used=parser_used
+            )
+            db.add(doc_page)
+            db.commit()
+            
         else:
-            logger.info(f"Document {document_id} is not a PDF. Skipping extraction.")
+            logger.info(f"Document {document_id} is not supported. Skipping extraction.")
             
         doc.status = DocumentStatus.ready
         db.commit()
