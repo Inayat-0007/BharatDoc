@@ -1,15 +1,47 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
+import re
+
+
+# ── Password Complexity Rules ──
+# Enforced: min 8 chars, at least 1 uppercase, 1 lowercase, 1 digit, 1 special char
+# This matches NIST SP 800-63B and OWASP password recommendations.
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_PATTERN = re.compile(
+    r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~])"
+)
+
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
 
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        errors = []
+        if len(v) < PASSWORD_MIN_LENGTH:
+            errors.append(f"at least {PASSWORD_MIN_LENGTH} characters")
+        if not re.search(r"[a-z]", v):
+            errors.append("one lowercase letter")
+        if not re.search(r"[A-Z]", v):
+            errors.append("one uppercase letter")
+        if not re.search(r"\d", v):
+            errors.append("one digit")
+        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~]", v):
+            errors.append("one special character (!@#$%^&*...)")
+        if errors:
+            raise ValueError(
+                f"Password must contain: {', '.join(errors)}"
+            )
+        return v
+
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
     created_at: datetime
+    is_verified: bool = False
     
     class Config:
         from_attributes = True
@@ -20,6 +52,46 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: str | None = None
+
+# ── Phase 18: Auth Hardening Schemas ──
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        errors = []
+        if len(v) < PASSWORD_MIN_LENGTH:
+            errors.append(f"at least {PASSWORD_MIN_LENGTH} characters")
+        if not re.search(r"[a-z]", v):
+            errors.append("one lowercase letter")
+        if not re.search(r"[A-Z]", v):
+            errors.append("one uppercase letter")
+        if not re.search(r"\d", v):
+            errors.append("one digit")
+        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~]", v):
+            errors.append("one special character (!@#$%^&*...)")
+        if errors:
+            raise ValueError(
+                f"Password must contain: {', '.join(errors)}"
+            )
+        return v
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+class MessageResponse(BaseModel):
+    message: str
+
+# ── Document Schemas (unchanged) ──
 
 class DocumentResponse(BaseModel):
     id: int

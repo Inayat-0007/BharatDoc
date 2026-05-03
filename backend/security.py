@@ -29,6 +29,10 @@ audit_logger.setLevel(logging.INFO)
 RATE_LIMITS = {
     "/auth/login": {"max_requests": 5, "window_seconds": 60},
     "/auth/register": {"max_requests": 3, "window_seconds": 60},
+    "/auth/forgot-password": {"max_requests": 3, "window_seconds": 60},
+    "/auth/reset-password": {"max_requests": 3, "window_seconds": 60},
+    "/auth/verify-email": {"max_requests": 5, "window_seconds": 60},
+    "/auth/resend-verification": {"max_requests": 3, "window_seconds": 60},
     "/documents/upload": {"max_requests": 10, "window_seconds": 60},
     "/documents/query": {"max_requests": 20, "window_seconds": 60},
     "/documents/search": {"max_requests": 20, "window_seconds": 60},
@@ -152,6 +156,10 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
     AUDIT_PATHS = {
         "/auth/login": "AUTH_LOGIN",
         "/auth/register": "AUTH_REGISTER",
+        "/auth/forgot-password": "AUTH_FORGOT_PASSWORD",
+        "/auth/reset-password": "AUTH_RESET_PASSWORD",
+        "/auth/verify-email": "AUTH_VERIFY_EMAIL",
+        "/auth/resend-verification": "AUTH_RESEND_VERIFICATION",
         "/documents/upload": "DOC_UPLOAD",
         "/documents/query": "DOC_QUERY",
         "/documents/search": "DOC_SEARCH",

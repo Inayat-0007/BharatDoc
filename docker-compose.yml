@@ -50,6 +50,9 @@ services:
       - USE_LLM=true
       - OLLAMA_MODEL=llama3.2:1b
       - OLLAMA_BASE_URL=http://ollama:11434
+      # Dev mode: skip email verification (no SMTP needed locally)
+      - REQUIRE_EMAIL_VERIFICATION=false
+      - FRONTEND_URL=http://localhost:5173
     ports:
       - "8000:8000"
     depends_on:

@@ -7,12 +7,17 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showResendVerification, setShowResendVerification] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setShowResendVerification(false);
+    setResendMessage('');
     setLoading(true);
 
     try {
@@ -30,7 +35,22 @@ const Login = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Invalid credentials');
+        const data = await response.json();
+        const detail = data.detail || 'Login failed';
+
+        // Detect unverified email error
+        if (response.status === 403 && detail.toLowerCase().includes('not verified')) {
+          setShowResendVerification(true);
+        }
+
+        // Detect account lockout
+        if (response.status === 423) {
+          setError(`🔒 ${detail}`);
+          setLoading(false);
+          return;
+        }
+
+        throw new Error(detail);
       }
 
       const data = await response.json();
@@ -50,6 +70,30 @@ const Login = () => {
       setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    setResendMessage('');
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
+      const response = await fetch(`${apiUrl}/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      if (response.ok) {
+        setResendMessage('Verification email sent! Check your inbox.');
+      } else {
+        setResendMessage('Failed to resend. Try again later.');
+      }
+    } catch {
+      setResendMessage('Network error. Please try again.');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -81,6 +125,25 @@ const Login = () => {
             </div>
           )}
 
+          {/* Unverified Email — Resend Verification */}
+          {showResendVerification && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-amber-700 dark:text-amber-400 text-sm mb-2">
+                📧 Your email is not yet verified. Check your inbox for the verification link.
+              </p>
+              <button
+                onClick={handleResendVerification}
+                disabled={resendLoading}
+                className="text-sm font-medium text-violet-600 dark:text-violet-400 hover:underline disabled:opacity-50"
+              >
+                {resendLoading ? 'Sending...' : 'Resend Verification Email'}
+              </button>
+              {resendMessage && (
+                <p className="mt-1 text-xs text-green-600 dark:text-green-400">{resendMessage}</p>
+              )}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
@@ -97,9 +160,17 @@ const Login = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-violet-600 dark:text-violet-400 hover:underline font-medium"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="login-password"
                 type="password"

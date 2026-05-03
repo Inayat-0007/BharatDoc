@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 
-const Register = () => {
-  const [email, setEmail] = useState('');
+const ResetPassword = () => {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token') || '';
+  const navigate = useNavigate();
+
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [registered, setRegistered] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   // Password strength indicator
   const getPasswordStrength = (pw: string): { level: number; label: string; color: string } => {
@@ -28,35 +32,68 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    if (!token) {
+      setError('Invalid reset link. Please request a new password reset.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || '/api';
-      const response = await fetch(`${apiUrl}/auth/register`, {
+      const response = await fetch(`${apiUrl}/auth/reset-password`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, new_password: password }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
-        // Handle validation errors from Pydantic
-        if (data.detail && Array.isArray(data.detail)) {
-          const messages = data.detail.map((err: any) => err.msg || err.message).join('. ');
-          throw new Error(messages);
-        }
-        throw new Error(data.detail || 'Registration failed');
+        throw new Error(data.detail || 'Failed to reset password');
       }
 
-      setRegistered(true);
+      setSuccess(true);
+      // Auto-redirect to login after 3 seconds
+      setTimeout(() => navigate('/login'), 3000);
     } catch (err: any) {
-      setError(err.message || 'Registration failed');
+      setError(err.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
   };
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-md text-center">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+              <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Invalid Reset Link</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
+              This password reset link is invalid or has expired. Please request a new one.
+            </p>
+            <Link
+              to="/forgot-password"
+              className="inline-flex items-center justify-center px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold text-sm"
+            >
+              Request New Reset Link
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -70,42 +107,37 @@ const Register = () => {
             BharatDoc
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
-            Create your account
+            Set New Password
           </p>
         </div>
 
         {/* Card */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 border border-slate-200 dark:border-slate-700 p-8">
-          {registered ? (
-            /* Registration Success — Verification Notice */
+          {success ? (
             <div className="text-center animate-fade-in-up">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
                 <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
-                Account Created! 🎉
+                Password Reset Successful!
               </h2>
-              <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-4">
-                We've sent a verification email to <strong className="text-slate-700 dark:text-slate-300">{email}</strong>.
-                Please check your inbox and click the verification link to activate your account.
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
+                Your password has been updated. All previous sessions have been invalidated for security.
               </p>
-              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs mb-6">
-                <strong>📧 Tip:</strong> Check your spam/junk folder if you don't see the email within a few minutes.
-              </div>
-              <Link
-                to="/login"
-                className="inline-flex items-center justify-center px-8 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-200"
-              >
-                Go to Login →
-              </Link>
+              <p className="text-violet-600 dark:text-violet-400 text-sm font-medium">
+                Redirecting to login...
+              </p>
             </div>
           ) : (
             <>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">
-                Register for BharatDoc
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                Create a new password
               </h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
+                Your new password must contain at least 8 characters, including uppercase, lowercase, a number, and a special character.
+              </p>
 
               {error && (
                 <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
@@ -116,31 +148,17 @@ const Register = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    Email
+                    New Password
                   </label>
                   <input
-                    id="register-email"
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
-                    placeholder="you@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    Password
-                  </label>
-                  <input
-                    id="register-password"
+                    id="reset-password"
                     type="password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     required
                     minLength={8}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
-                    placeholder="Min 8 chars, upper, lower, digit, special"
+                    placeholder="••••••••"
                   />
                   {/* Password Strength Meter */}
                   {password && (
@@ -164,34 +182,40 @@ const Register = () => {
                       </p>
                     </div>
                   )}
-                  <p className="mt-1 text-xs text-slate-400">
-                    Must include uppercase, lowercase, number & special character
-                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="reset-confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+                    placeholder="••••••••"
+                  />
+                  {confirmPassword && password !== confirmPassword && (
+                    <p className="mt-1 text-xs text-red-500">Passwords do not match</p>
+                  )}
                 </div>
                 <button
-                  id="register-submit"
+                  id="reset-submit"
                   type="submit"
-                  disabled={loading || strength.level < 4}
+                  disabled={loading || password !== confirmPassword}
                   className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Creating account...' : 'Create Account'}
+                  {loading ? 'Resetting...' : 'Reset Password'}
                 </button>
               </form>
             </>
           )}
         </div>
-
-        {!registered && (
-          <p className="text-center mt-6 text-sm text-slate-500 dark:text-slate-400">
-            Already have an account?{' '}
-            <Link to="/login" className="text-violet-600 dark:text-violet-400 hover:underline font-medium">
-              Login here
-            </Link>
-          </p>
-        )}
       </div>
     </div>
   );
 };
 
-export default Register;
+export default ResetPassword;

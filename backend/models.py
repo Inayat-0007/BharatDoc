@@ -20,6 +20,18 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # ── Phase 18: Auth Hardening Fields ──
+    # Email verification — accounts are unverified by default
+    is_verified = Column(Boolean, default=False, server_default="false", nullable=False)
+
+    # Account lockout — brute-force protection
+    # Locks after MAX_FAILED_ATTEMPTS consecutive failures for LOCKOUT_DURATION_MINUTES
+    failed_login_attempts = Column(Integer, default=0, server_default="0", nullable=False)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+
+    # Password change tracking — invalidate old sessions after password reset
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
+
     documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
 
 class Document(Base):
@@ -67,4 +79,3 @@ class DocumentChunk(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     document = relationship("Document", back_populates="chunks")
-
